@@ -16,7 +16,7 @@ const demoSnapshot: MarketSnapshot = {
   recent_activity: [
     { id: "demo-1", team: "storm", amount: 5, created_at: "2026-09-03T00:00:00.000Z" },
     { id: "demo-2", team: "blaze", amount: 5, created_at: "2026-09-02T23:58:00.000Z" },
-    { id: "demo-3", team: "storm", amount: 10, created_at: "2026-09-02T23:56:00.000Z" },
+    { id: "demo-3", team: "storm", team_id: "team-charise", amount: 10, created_at: "2026-09-02T23:56:00.000Z" },
     { id: "demo-4", team: "blaze", amount: 20, created_at: "2026-09-02T23:53:00.000Z" },
   ],
   market_open: true,
@@ -305,11 +305,12 @@ function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, 
 }
 
 function ActivityItem({ item, showRelativeTime }: { item: PublicActivity; showRelativeTime: boolean }) {
+  const officialTeam = item.team_id ? TEAM_BY_ID[item.team_id] : undefined;
   return (
-    <li className={`activity-item ${item.team}`}>
+    <li className={`activity-item ${item.team} ${officialTeam ? "official-activity" : ""}`} style={officialTeam ? teamStyle(officialTeam) : undefined}>
       <span className="activity-pulse" aria-hidden="true" />
       <span className="activity-amount">+{formatMoney(Math.round(Number(item.amount) * 100))}</span>
-      <span className="activity-team">{teamName(item.team)}</span>
+      <span className="activity-team">{officialTeam?.name ?? teamName(item.team)}</span>
       <time dateTime={item.created_at}>{showRelativeTime ? relativeTime(item.created_at) : "—"}</time>
     </li>
   );

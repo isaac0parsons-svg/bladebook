@@ -12,6 +12,7 @@ export interface Bet {
 export interface PublicActivity {
   id: string;
   team: Team;
+  team_id?: string;
   amount: number;
   created_at: string;
 }

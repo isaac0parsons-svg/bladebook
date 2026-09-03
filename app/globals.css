@@ -325,9 +325,11 @@ button { color:inherit; }
 .activity-pulse { width:6px; height:6px; border-radius:50%; }
 .activity-item.storm .activity-pulse { background:var(--storm-light); box-shadow:0 0 9px var(--storm); }
 .activity-item.blaze .activity-pulse { background:var(--blaze-light); box-shadow:0 0 9px var(--blaze); }
+.activity-item.official-activity .activity-pulse { background:var(--team-accent); box-shadow:0 0 9px rgba(var(--team-rgb),.8); }
 .activity-amount { font-weight:800; }
 .activity-item.storm .activity-amount { color:var(--storm-light); }
 .activity-item.blaze .activity-amount { color:var(--blaze-light); }
+.activity-item.official-activity .activity-amount { color:var(--team-accent); }
 .activity-team { color:#c4c9d0; }
 .activity-item time { color:var(--muted); font-size:.65rem; }
 .empty-activity { margin:30px 0; color:var(--muted); font-size:.8rem; }
