@@ -1,5 +1,3 @@
-import type { Team } from "./types";
-
 export type TeamLogoType = "burst" | "blade" | "doom" | "duo" | "link" | "luxury" | "crown";
 
 export interface TournamentTeam {
@@ -11,12 +9,9 @@ export interface TournamentTeam {
   accentRgb: string;
   monogram: string;
   logoType: TeamLogoType;
-  openingGame?: number;
-  status: "READY" | "NEXT UP";
-  editorialTag: string;
   marketLabel: string;
   flavourLine: string;
-  powerRank: number;
+  displayOrder: number;
 }
 
 export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
@@ -29,28 +24,22 @@ export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
     accentRgb: "168,108,255",
     monogram: "B!",
     logoType: "burst",
-    openingGame: 2,
-    status: "READY",
-    editorialTag: "ONE TO WATCH",
     marketLabel: "BURST PRESSURE",
     flavourLine: "Built to break brackets.",
-    powerRank: 2,
+    displayOrder: 1,
   },
   {
     id: "team-charise",
     name: "Team Charise",
     shortName: "CHARISE",
-    members: ["Ing", "Jo"],
+    members: ["Ing", "Joseph"],
     accent: "#3da9ff",
     accentRgb: "61,169,255",
     monogram: "CH",
     logoType: "blade",
-    openingGame: 4,
-    status: "READY",
-    editorialTag: "DARK HORSE",
     marketLabel: "TECHNICAL EDGE",
     flavourLine: "Quietly dangerous.",
-    powerRank: 3,
+    displayOrder: 2,
   },
   {
     id: "executors-of-doom",
@@ -61,12 +50,9 @@ export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
     accentRgb: "131,255,90",
     monogram: "XD",
     logoType: "doom",
-    openingGame: 1,
-    status: "NEXT UP",
-    editorialTag: "FAVOURITE",
     marketLabel: "HEAVY PRESSURE",
     flavourLine: "Heavy favourite energy.",
-    powerRank: 1,
+    displayOrder: 3,
   },
   {
     id: "nate-ethan",
@@ -77,12 +63,9 @@ export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
     accentRgb: "255,173,61",
     monogram: "N+E",
     logoType: "duo",
-    openingGame: 3,
-    status: "NEXT UP",
-    editorialTag: "SLEEPER PICK",
     marketLabel: "DUAL THREAT",
     flavourLine: "Twice the trouble.",
-    powerRank: 5,
+    displayOrder: 4,
   },
   {
     id: "jack-roy",
@@ -93,11 +76,9 @@ export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
     accentRgb: "142,238,255",
     monogram: "JR",
     logoType: "link",
-    status: "READY",
-    editorialTag: "UNDERDOG",
     marketLabel: "COLD LINK",
     flavourLine: "Market sleeping on them.",
-    powerRank: 7,
+    displayOrder: 5,
   },
   {
     id: "vanillas-in-paris",
@@ -108,11 +89,9 @@ export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
     accentRgb: "255,79,200",
     monogram: "VP",
     logoType: "luxury",
-    status: "READY",
-    editorialTag: "WILD CARD",
     marketLabel: "LUXURY CHAOS",
     flavourLine: "Maximum chaos potential.",
-    powerRank: 6,
+    displayOrder: 6,
   },
   {
     id: "cristian-theo",
@@ -123,26 +102,12 @@ export const TOURNAMENT_TEAMS: readonly TournamentTeam[] = [
     accentRgb: "255,211,90",
     monogram: "CT",
     logoType: "crown",
-    status: "READY",
-    editorialTag: "HIGH UPSIDE",
     marketLabel: "CROWN PRESSURE",
     flavourLine: "Built for the spotlight.",
-    powerRank: 4,
+    displayOrder: 7,
   },
 ] as const;
 
 export const TEAM_BY_ID = Object.fromEntries(
   TOURNAMENT_TEAMS.map((team) => [team.id, team]),
 ) as Record<string, TournamentTeam>;
-
-export const ACTIVE_MATCHUP = {
-  label: "NEXT UP",
-  teamAId: "executors-of-doom",
-  teamBId: "nate-ethan",
-} as const;
-
-export const POWER_BOARD = [...TOURNAMENT_TEAMS].sort((a, b) => a.powerRank - b.powerRank);
-
-export function teamForMarketSide(side: Team): TournamentTeam {
-  return TEAM_BY_ID[side === "storm" ? ACTIVE_MATCHUP.teamAId : ACTIVE_MATCHUP.teamBId];
-}

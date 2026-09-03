@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { calculatePayouts, formatMoney, projectReturn, toCents } from "@/lib/market";
+import { calculatePayouts, formatMoney, toCents } from "@/lib/market";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import { teamForMarketSide } from "@/lib/teams";
-import type { Bet, MarketState, Team } from "@/lib/types";
+import { TEAM_BY_ID, TOURNAMENT_TEAMS, type TournamentTeam } from "@/lib/teams";
+import type { Bet, MarketState } from "@/lib/types";
 
-function nameFor(team: Team) {
-  return teamForMarketSide(team).name;
+function nameFor(teamId: string) {
+  return TEAM_BY_ID[teamId]?.name ?? "Unknown team";
 }
 
-const marketTeamA = teamForMarketSide("storm");
-const marketTeamB = teamForMarketSide("blaze");
+function teamStyle(team: TournamentTeam): React.CSSProperties {
+  return { "--team-accent": team.accent, "--team-rgb": team.accentRgb } as React.CSSProperties;
+}
 
 function downloadCsv(rows: ReturnType<typeof calculatePayouts>) {
   const quote = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
@@ -21,7 +22,7 @@ function downloadCsv(rows: ReturnType<typeof calculatePayouts>) {
     ["name", "team", "stake", "result", "profit", "payout"].map(quote).join(","),
     ...rows.map((row) => [
       row.name,
-      row.team,
+      nameFor(row.team_id),
       (row.stakeCents / 100).toFixed(2),
       row.result,
       (row.profitCents / 100).toFixed(2),
@@ -84,7 +85,7 @@ function EditRow({ bet, onSave, onCancel }: EditRowProps) {
   return (
     <tr className="editing-row">
       <td><input aria-label="Edit bettor name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></td>
-      <td><select aria-label="Edit team" value={draft.team} onChange={(event) => setDraft({ ...draft, team: event.target.value as Team })}><option value="storm">{marketTeamA.name}</option><option value="blaze">{marketTeamB.name}</option></select></td>
+      <td><select aria-label="Edit team" value={draft.team_id} onChange={(event) => setDraft({ ...draft, team_id: event.target.value })}>{TOURNAMENT_TEAMS.map((team) => <option value={team.id} key={team.id}>{team.name}</option>)}</select></td>
       <td><input aria-label="Edit amount" type="number" min="0.01" step="0.01" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} /></td>
       <td>—</td>
       <td colSpan={2}><div className="row-actions"><button onClick={() => void onSave(draft)}>SAVE</button><button onClick={onCancel}>CANCEL</button></div></td>
@@ -102,7 +103,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("5.00");
-  const [team, setTeam] = useState<Team>("storm");
+  const [teamId, setTeamId] = useState(TOURNAMENT_TEAMS[0].id);
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
@@ -113,7 +114,7 @@ export function AdminDashboard() {
     if (!supabase) return;
     setLoading(true);
     const [betsResult, marketResult] = await Promise.all([
-      supabase.from("bets").select("id,name,team,amount,created_at").order("created_at", { ascending: false }),
+      supabase.from("bets").select("id,name,team_id,amount,created_at").order("created_at", { ascending: false }),
       supabase.from("market_state").select("*").eq("id", 1).single(),
     ]);
     if (betsResult.error || marketResult.error) {
@@ -158,19 +159,19 @@ export function AdminDashboard() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const metrics = useMemo(() => {
-    const storm = bets.filter((bet) => bet.team === "storm");
-    const blaze = bets.filter((bet) => bet.team === "blaze");
-    const stormCents = storm.reduce((sum, bet) => sum + toCents(bet.amount), 0);
-    const blazeCents = blaze.reduce((sum, bet) => sum + toCents(bet.amount), 0);
-    return { stormCents, blazeCents, totalCents: stormCents + blazeCents, stormEntries: storm.length, blazeEntries: blaze.length };
-  }, [bets]);
+  const totalCents = useMemo(() => bets.reduce((sum, bet) => sum + toCents(bet.amount), 0), [bets]);
+  const teamMetrics = useMemo(() => TOURNAMENT_TEAMS.map((team) => {
+    const teamBets = bets.filter((bet) => bet.team_id === team.id);
+    return {
+      team,
+      totalCents: teamBets.reduce((sum, bet) => sum + toCents(bet.amount), 0),
+      entries: teamBets.length,
+    };
+  }).sort((a, b) => b.totalCents - a.totalCents || b.entries - a.entries || a.team.displayOrder - b.team.displayOrder), [bets]);
 
   const filteredBets = useMemo(() => bets.filter((bet) => bet.name.toLowerCase().includes(search.trim().toLowerCase())), [bets, search]);
-  const payouts = useMemo(() => market?.winning_team ? calculatePayouts(bets, market.winning_team) : [], [bets, market]);
+  const payouts = useMemo(() => market?.winning_team_id ? calculatePayouts(bets, market.winning_team_id) : [], [bets, market]);
   const marketOpen = Boolean(market?.market_open && market.event_status === "open");
-  const stormReturn = projectReturn(metrics.stormCents, metrics.blazeCents);
-  const blazeReturn = projectReturn(metrics.blazeCents, metrics.stormCents);
 
   useEffect(() => {
     if (!session || !marketOpen) return;
@@ -178,16 +179,16 @@ export function AdminDashboard() {
     return () => window.cancelAnimationFrame(frame);
   }, [session, marketOpen]);
 
-  async function addEntry(entryTeam: Team, entryAmount: number) {
+  async function addEntry(entryTeamId: string, entryAmount: number) {
     const supabase = getSupabaseBrowserClient();
     const cleanName = name.trim();
     if (!supabase || !cleanName || !marketOpen || entryAmount <= 0) return;
     setLoading(true);
-    const { error } = await supabase.from("bets").insert({ name: cleanName, team: entryTeam, amount: entryAmount.toFixed(2) });
+    const { error } = await supabase.from("bets").insert({ name: cleanName, team_id: entryTeamId, amount: entryAmount.toFixed(2) });
     if (error) setToast(`ERROR · ${error.message}`);
     else {
       setName("");
-      setToast(`${nameFor(entryTeam).toUpperCase()} +${formatMoney(Math.round(entryAmount * 100))}`);
+      setToast(`${nameFor(entryTeamId).toUpperCase()} +${formatMoney(Math.round(entryAmount * 100))}`);
       await loadData();
       window.requestAnimationFrame(() => nameInput.current?.focus());
     }
@@ -197,7 +198,7 @@ export function AdminDashboard() {
   async function saveBet(draft: Bet) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase || !marketOpen || !draft.name.trim() || toCents(draft.amount) <= 0) return;
-    const { error } = await supabase.from("bets").update({ name: draft.name.trim(), team: draft.team, amount: (toCents(draft.amount) / 100).toFixed(2) }).eq("id", draft.id);
+    const { error } = await supabase.from("bets").update({ name: draft.name.trim(), team_id: draft.team_id, amount: (toCents(draft.amount) / 100).toFixed(2) }).eq("id", draft.id);
     setToast(error ? `ERROR · ${error.message}` : "ENTRY UPDATED");
     if (!error) setEditingId(null);
     await loadData();
@@ -205,7 +206,7 @@ export function AdminDashboard() {
 
   async function deleteBet(bet: Bet) {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !marketOpen || !window.confirm(`Delete ${bet.name}'s ${formatMoney(toCents(bet.amount))} ${nameFor(bet.team)} entry?`)) return;
+    if (!supabase || !marketOpen || !window.confirm(`Delete ${bet.name}'s ${formatMoney(toCents(bet.amount))} ${nameFor(bet.team_id)} entry?`)) return;
     const { error } = await supabase.from("bets").delete().eq("id", bet.id);
     setToast(error ? `ERROR · ${error.message}` : "ENTRY DELETED");
     await loadData();
@@ -220,13 +221,13 @@ export function AdminDashboard() {
     await loadData();
   }
 
-  async function declareWinner(winner: Team) {
+  async function declareWinner(winnerTeamId: string) {
     const supabase = getSupabaseBrowserClient();
-    const pool = winner === "storm" ? metrics.stormCents : metrics.blazeCents;
+    const pool = teamMetrics.find((metric) => metric.team.id === winnerTeamId)?.totalCents ?? 0;
     if (!supabase || !market || market.event_status !== "closed" || pool <= 0) return;
-    if (!window.confirm(`Confirm ${nameFor(winner)} as the winner? This locks the market and calculates final payouts.`)) return;
-    const { error } = await supabase.from("market_state").update({ market_open: false, event_status: "settled", winning_team: winner }).eq("id", 1);
-    setToast(error ? `ERROR · ${error.message}` : `${nameFor(winner).toUpperCase()} WIN`);
+    if (!window.confirm(`Confirm ${nameFor(winnerTeamId)} as the tournament winner? This locks the market and calculates final payouts.`)) return;
+    const { error } = await supabase.from("market_state").update({ market_open: false, event_status: "settled", winning_team_id: winnerTeamId }).eq("id", 1);
+    setToast(error ? `ERROR · ${error.message}` : `${nameFor(winnerTeamId).toUpperCase()} WIN`);
     await loadData();
   }
 
@@ -251,27 +252,29 @@ export function AdminDashboard() {
 
       <section className="admin-title-row">
         <div><p className="admin-kicker">TOURNAMENT OPERATIONS</p><h1>Market control</h1></div>
-        <div className={`admin-market-status ${marketOpen ? "open" : "closed"}`}><i />{market?.event_status === "settled" ? `${nameFor(market.winning_team!)} win` : marketOpen ? "Market open" : "Market closed"}</div>
+        <div className={`admin-market-status ${marketOpen ? "open" : "closed"}`}><i />{market?.event_status === "settled" ? `${nameFor(market.winning_team_id!)} win` : marketOpen ? "Market open" : "Market closed"}</div>
       </section>
 
       <section className="admin-metrics">
-        <article className="metric-tile storm"><span>{marketTeamA.shortName} POOL</span><strong>{formatMoney(metrics.stormCents)}</strong><small>{metrics.stormEntries} ENTRIES · $5 → {stormReturn ? formatMoney(stormReturn.payoutCents) : "—"}</small></article>
-        <article className="metric-tile blaze"><span>{marketTeamB.shortName} POOL</span><strong>{formatMoney(metrics.blazeCents)}</strong><small>{metrics.blazeEntries} ENTRIES · $5 → {blazeReturn ? formatMoney(blazeReturn.payoutCents) : "—"}</small></article>
-        <article className="metric-tile total"><span>TOTAL MARKET</span><strong>{formatMoney(metrics.totalCents)}</strong><small>{bets.length} TOTAL ENTRIES</small></article>
+        {teamMetrics.map(({ team, totalCents: teamCents, entries }) => (
+          <article className="metric-tile team-metric" style={teamStyle(team)} key={team.id}><span>{team.shortName} POOL</span><strong>{formatMoney(teamCents)}</strong><small>{entries} {entries === 1 ? "BACKER" : "BACKERS"}</small></article>
+        ))}
+        <article className="metric-tile total"><span>TOTAL TOURNAMENT POOL</span><strong>{formatMoney(totalCents)}</strong><small>{bets.length} TOTAL ENTRIES</small></article>
       </section>
 
       <section className="admin-main-grid">
         <div className="entry-console">
           <div className="admin-section-head"><div><span>01 / RAPID ENTRY</span><h2>Log a payment</h2></div><b>{marketOpen ? "READY" : "LOCKED"}</b></div>
-          <label className="quick-name">BETTOR NAME<input ref={nameInput} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && name.trim()) { event.preventDefault(); void addEntry(team, Number(amount)); } }} disabled={!marketOpen || loading} placeholder="Type a name…" /></label>
+          <label className="quick-name">BETTOR NAME<input ref={nameInput} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && name.trim()) { event.preventDefault(); void addEntry(teamId, Number(amount)); } }} disabled={!marketOpen || loading} placeholder="Type a name…" /></label>
           <div className="quick-buttons">
-            <button className="quick-storm" disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry("storm", 5)}><span>{marketTeamA.monogram}</span><b>+$5 {marketTeamA.shortName}</b><small>ONE TAP ENTRY</small></button>
-            <button className="quick-blaze" disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry("blaze", 5)}><span>{marketTeamB.monogram}</span><b>+$5 {marketTeamB.shortName}</b><small>ONE TAP ENTRY</small></button>
+            {TOURNAMENT_TEAMS.map((entryTeam) => (
+              <button className="quick-team" style={teamStyle(entryTeam)} disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry(entryTeam.id, 5)} key={entryTeam.id}><span>{entryTeam.monogram}</span><b>+$5 {entryTeam.shortName}</b><small>ONE TAP ENTRY</small></button>
+            ))}
           </div>
           <div className="custom-entry">
-            <label>TEAM<select value={team} onChange={(event) => setTeam(event.target.value as Team)} disabled={!marketOpen}><option value="storm">{marketTeamA.name}</option><option value="blaze">{marketTeamB.name}</option></select></label>
+            <label>TEAM<select value={teamId} onChange={(event) => setTeamId(event.target.value)} disabled={!marketOpen}>{TOURNAMENT_TEAMS.map((entryTeam) => <option value={entryTeam.id} key={entryTeam.id}>{entryTeam.name}</option>)}</select></label>
             <label>AMOUNT<input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} disabled={!marketOpen} /></label>
-            <button disabled={!marketOpen || !name.trim() || Number(amount) <= 0 || loading} onClick={() => void addEntry(team, Number(amount))}>ADD CUSTOM →</button>
+            <button disabled={!marketOpen || !name.trim() || Number(amount) <= 0 || loading} onClick={() => void addEntry(teamId, Number(amount))}>ADD CUSTOM →</button>
           </div>
           {!marketOpen && <p className="locked-note">Quick entry and ledger changes are disabled while the market is closed.</p>}
         </div>
@@ -283,10 +286,11 @@ export function AdminDashboard() {
             <button className={!marketOpen && market?.event_status !== "settled" ? "active" : ""} disabled={!marketOpen || market?.event_status === "settled"} onClick={() => void setMarketOpen(false)}>CLOSE MARKET</button>
           </div>
           <div className="winner-controls">
-            <span>DECLARE WINNER</span>
-            <p>Close the market before confirming a result.</p>
-            <button className="storm" disabled={market?.event_status !== "closed" || metrics.stormCents <= 0} onClick={() => void declareWinner("storm")}>{marketTeamA.monogram} {marketTeamA.shortName} WIN</button>
-            <button className="blaze" disabled={market?.event_status !== "closed" || metrics.blazeCents <= 0} onClick={() => void declareWinner("blaze")}>{marketTeamB.monogram} {marketTeamB.shortName} WIN</button>
+            <span>DECLARE TOURNAMENT WINNER</span>
+            <p>Close the market before confirming the champion.</p>
+            {teamMetrics.map(({ team, totalCents: teamCents }) => (
+              <button className="team-winner-button" style={teamStyle(team)} disabled={market?.event_status !== "closed" || teamCents <= 0} onClick={() => void declareWinner(team.id)} key={team.id}>{team.monogram} {team.shortName} WIN</button>
+            ))}
           </div>
         </aside>
       </section>
@@ -294,17 +298,18 @@ export function AdminDashboard() {
       <section className="ledger-section">
         <div className="ledger-toolbar"><div><span>03 / ENTRY LEDGER</span><h2>All backing</h2></div><label>SEARCH<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a bettor…" /></label></div>
         <div className="table-wrap"><table className="ledger-table"><thead><tr><th>NAME</th><th>TEAM</th><th>AMOUNT</th><th>TIME</th><th>EDIT</th><th>DELETE</th></tr></thead><tbody>
-          {filteredBets.map((bet) => editingId === bet.id ? <EditRow key={bet.id} bet={bet} onSave={saveBet} onCancel={() => setEditingId(null)} /> : (
-            <tr key={bet.id}><td data-label="Name"><strong>{bet.name}</strong></td><td data-label="Team"><span className={`team-pill ${bet.team}`}>{teamForMarketSide(bet.team).monogram} {teamForMarketSide(bet.team).shortName}</span></td><td data-label="Amount">{formatMoney(toCents(bet.amount))}</td><td data-label="Time"><time dateTime={bet.created_at}>{new Date(bet.created_at).toLocaleString("en-AU", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" })}</time></td><td><button className="table-action" disabled={!marketOpen} onClick={() => setEditingId(bet.id)}>EDIT</button></td><td><button className="table-action delete" disabled={!marketOpen} onClick={() => void deleteBet(bet)}>DELETE</button></td></tr>
-          ))}
+          {filteredBets.map((bet) => editingId === bet.id ? <EditRow key={bet.id} bet={bet} onSave={saveBet} onCancel={() => setEditingId(null)} /> : (() => {
+            const identity = TEAM_BY_ID[bet.team_id];
+            return <tr key={bet.id}><td data-label="Name"><strong>{bet.name}</strong></td><td data-label="Team"><span className="team-pill" style={identity ? teamStyle(identity) : undefined}>{identity?.monogram} {identity?.shortName ?? nameFor(bet.team_id)}</span></td><td data-label="Amount">{formatMoney(toCents(bet.amount))}</td><td data-label="Time"><time dateTime={bet.created_at}>{new Date(bet.created_at).toLocaleString("en-AU", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" })}</time></td><td><button className="table-action" disabled={!marketOpen} onClick={() => setEditingId(bet.id)}>EDIT</button></td><td><button className="table-action delete" disabled={!marketOpen} onClick={() => void deleteBet(bet)}>DELETE</button></td></tr>;
+          })())}
           {filteredBets.length === 0 && <tr><td className="empty-ledger" colSpan={6}>{bets.length ? "No names match your search." : "No entries yet. The first payment will appear here."}</td></tr>}
         </tbody></table></div>
       </section>
 
-      {market?.winning_team && (
-        <section className={`payout-section ${market.winning_team}`}>
-          <div className="payout-summary"><div><span>04 / FINAL SETTLEMENT</span><h2>{nameFor(market.winning_team)} win</h2><p>{formatMoney(metrics.totalCents)} TOTAL POOL · {payouts.filter((row) => row.result === "winner").length} WINNERS</p></div><button onClick={() => downloadCsv(payouts)}>EXPORT CSV ↓</button></div>
-          <div className="table-wrap"><table className="ledger-table payout-table"><thead><tr><th>NAME</th><th>STAKE</th><th>TEAM</th><th>RESULT</th><th>PROFIT</th><th>TOTAL PAYOUT</th></tr></thead><tbody>{payouts.map((row) => <tr key={row.id}><td><strong>{row.name}</strong></td><td>{formatMoney(row.stakeCents)}</td><td><span className={`team-pill ${row.team}`}>{row.team.toUpperCase()}</span></td><td><span className={`result-pill ${row.result}`}>{row.result.toUpperCase()}</span></td><td className={row.profitCents >= 0 ? "positive" : "negative"}>{formatMoney(row.profitCents, row.profitCents > 0)}</td><td><strong>{formatMoney(row.payoutCents)}</strong></td></tr>)}</tbody></table></div>
+      {market?.winning_team_id && (
+        <section className="payout-section" style={teamStyle(TEAM_BY_ID[market.winning_team_id])}>
+          <div className="payout-summary"><div><span>04 / FINAL SETTLEMENT</span><h2>{nameFor(market.winning_team_id)} win</h2><p>{formatMoney(totalCents)} TOTAL POOL · {payouts.filter((row) => row.result === "winner").length} WINNERS</p></div><button onClick={() => downloadCsv(payouts)}>EXPORT CSV ↓</button></div>
+          <div className="table-wrap"><table className="ledger-table payout-table"><thead><tr><th>NAME</th><th>STAKE</th><th>TEAM</th><th>RESULT</th><th>PROFIT</th><th>TOTAL PAYOUT</th></tr></thead><tbody>{payouts.map((row) => <tr key={row.id}><td><strong>{row.name}</strong></td><td>{formatMoney(row.stakeCents)}</td><td><span className="team-pill" style={TEAM_BY_ID[row.team_id] ? teamStyle(TEAM_BY_ID[row.team_id]) : undefined}>{nameFor(row.team_id)}</span></td><td><span className={`result-pill ${row.result}`}>{row.result.toUpperCase()}</span></td><td className={row.profitCents >= 0 ? "positive" : "negative"}>{formatMoney(row.profitCents, row.profitCents > 0)}</td><td><strong>{formatMoney(row.payoutCents)}</strong></td></tr>)}</tbody></table></div>
         </section>
       )}
     </main>

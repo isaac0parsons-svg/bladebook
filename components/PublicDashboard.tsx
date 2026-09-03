@@ -2,26 +2,25 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { formatMoney, marketPercent, projectReturn, teamTotals } from "@/lib/market";
+import { FIVE_DOLLARS_CENTS, formatMoney, marketPercent, projectReturn, toCents } from "@/lib/market";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import { ACTIVE_MATCHUP, POWER_BOARD, TEAM_BY_ID, TOURNAMENT_TEAMS, teamForMarketSide, type TournamentTeam } from "@/lib/teams";
-import type { MarketSnapshot, PublicActivity, Team } from "@/lib/types";
+import { TEAM_BY_ID, TOURNAMENT_TEAMS, type TournamentTeam } from "@/lib/teams";
+import type { MarketSnapshot, PublicActivity, Team, TeamMarketTotal } from "@/lib/types";
 
 const demoSnapshot: MarketSnapshot = {
   id: 1,
-  storm_total: 40,
-  blaze_total: 80,
-  storm_entries: 8,
-  blaze_entries: 13,
+  team_totals: TOURNAMENT_TEAMS.map((team) => ({
+    team_id: team.id,
+    total: team.id === "team-charise" ? 10 : 0,
+    entries: team.id === "team-charise" ? 2 : 0,
+  })),
   recent_activity: [
-    { id: "demo-1", team: "storm", amount: 5, created_at: "2026-09-03T00:00:00.000Z" },
-    { id: "demo-2", team: "blaze", amount: 5, created_at: "2026-09-02T23:58:00.000Z" },
-    { id: "demo-3", team: "storm", team_id: "team-charise", amount: 10, created_at: "2026-09-02T23:56:00.000Z" },
-    { id: "demo-4", team: "blaze", amount: 20, created_at: "2026-09-02T23:53:00.000Z" },
+    { id: "demo-1", team_id: "team-charise", amount: 5, created_at: "2026-09-03T00:00:00.000Z" },
+    { id: "demo-2", team_id: "team-charise", amount: 5, created_at: "2026-09-02T23:58:00.000Z" },
   ],
   market_open: true,
   event_status: "open",
-  winning_team: null,
+  winning_team_id: null,
   updated_at: "2026-09-03T00:00:00.000Z",
 };
 
@@ -40,8 +39,8 @@ function relativeTime(timestamp: string): string {
   return `${Math.floor(minutes / 60)}h ago`;
 }
 
-function teamName(team: Team): string {
-  return teamForMarketSide(team).name;
+function teamName(teamId: string): string {
+  return TEAM_BY_ID[teamId]?.name ?? "Unknown team";
 }
 
 function teamStyle(team: TournamentTeam): React.CSSProperties {
@@ -60,57 +59,63 @@ function TeamBadge({ team, compact = false }: { team: TournamentTeam; compact?: 
   );
 }
 
-function EditorialPick({ stormCents, blazeCents }: { stormCents: number; blazeCents: number }) {
-  const stormProjection = projectReturn(stormCents, blazeCents);
-  const blazeProjection = projectReturn(blazeCents, stormCents);
-  const pickSide: Team = (blazeProjection?.payoutCents ?? 0) > (stormProjection?.payoutCents ?? 0) ? "blaze" : "storm";
-  const pick = teamForMarketSide(pickSide);
-  const projection = pickSide === "storm" ? stormProjection : blazeProjection;
+interface RankedTeam {
+  team: TournamentTeam;
+  totalCents: number;
+  entries: number;
+  percent: number;
+  newFiveDollarReturn: ReturnType<typeof projectReturn>;
+}
+
+function EditorialPick({ pick }: { pick: RankedTeam }) {
+  const { team, newFiveDollarReturn: projection } = pick;
 
   return (
-    <section className="editorial-pick" style={teamStyle(pick)} aria-labelledby="editorial-pick-title" data-reveal>
+    <section className="editorial-pick" style={teamStyle(team)} aria-labelledby="editorial-pick-title" data-reveal>
       <div className="editorial-pick-copy">
         <p>OUR PICK <span>{"// VALUE WATCH"}</span></p>
-        <h2 id="editorial-pick-title">{pick.name}</h2>
-        <small>{pick.members.join(" + ")} · Based on the current pool split</small>
+        <h2 id="editorial-pick-title">{team.name}</h2>
+        <small>{team.members.join(" + ")} · Based on the current tournament pool</small>
       </div>
       <div className="editorial-pick-return">
         <div>
-          <span>CURRENT $5 RETURN</span>
+          <span>EST. NEW $5 RETURN</span>
           <strong>{projection ? formatMoney(projection.payoutCents) : "—"}</strong>
           <small>{projection ? `${formatMoney(projection.profitCents, true)} potential profit` : "Awaiting backing"}</small>
         </div>
-        <TeamBadge team={pick} compact />
+        <TeamBadge team={team} compact />
       </div>
       <p className="editorial-pick-note">Editorial lean only · returns move with every bet</p>
     </section>
   );
 }
 
-function TournamentField() {
+function TournamentField({ rankings, featuredIds }: { rankings: RankedTeam[]; featuredIds: Set<string> }) {
+  const remainingTeams = rankings.filter(({ team }) => !featuredIds.has(team.id));
+
   return (
     <section className="tournament-field" aria-labelledby="tournament-field-title" data-reveal>
       <div className="field-heading">
         <div>
-          <p>OFFICIAL ROSTER // 07 TEAMS</p>
-          <h2 id="tournament-field-title">Tournament field</h2>
+          <p>TOURNAMENT WINNER MARKET // {TOURNAMENT_TEAMS.length.toString().padStart(2, "0")} TEAMS</p>
+          <h2 id="tournament-field-title">Rest of the field</h2>
         </div>
-        <span>EDITORIAL TAGS · NOT CALCULATED ODDS</span>
+        <span>LIVE POOL DATA · UPDATES WITH EVERY BET</span>
       </div>
       <div className="field-layout">
         <div className="team-card-grid">
-          {TOURNAMENT_TEAMS.map((team) => (
-            <article className={`roster-card logo-${team.logoType}`} style={teamStyle(team)} data-rank={String(team.powerRank).padStart(2, "0")} key={team.id}>
+          {remainingTeams.map(({ team, totalCents, entries, percent }, index) => (
+            <article className={`roster-card logo-${team.logoType}`} style={teamStyle(team)} data-rank={String(index + 3).padStart(2, "0")} key={team.id}>
               <div className="roster-card-top">
                 <TeamBadge team={team} />
-                <div className="roster-status"><i />{team.status}</div>
+                <div className="roster-status"><i />#{index + 3} MARKET</div>
               </div>
               <p className="roster-label">{team.marketLabel}</p>
               <h3>{team.name}</h3>
               <p className="roster-members">{team.members.join(" & ")}</p>
               <div className="roster-meta">
-                <span>{team.openingGame ? `OPENING · GAME ${team.openingGame}` : "OPENING · —"}</span>
-                <b>{team.editorialTag}</b>
+                <span>{formatMoney(totalCents)} · {entries} {entries === 1 ? "BACKER" : "BACKERS"}</span>
+                <b>{Math.round(percent)}% SHARE</b>
               </div>
               <blockquote>“{team.flavourLine}”</blockquote>
             </article>
@@ -118,16 +123,16 @@ function TournamentField() {
         </div>
         <aside className="power-board" aria-labelledby="power-board-title">
           <div className="power-board-head">
-            <span>EDITORIAL RANKING</span>
+            <span>LIVE MARKET RANKING</span>
             <h3 id="power-board-title">BladeBook<br />Power Board</h3>
-            <p>Pre-tournament desk picks. Pure opinion, maximum debate.</p>
+            <p>Ranked by money backed, with market share and backer count shown live.</p>
           </div>
           <ol>
-            {POWER_BOARD.map((team) => (
+            {rankings.map(({ team, totalCents, entries, percent }, index) => (
               <li key={team.id} style={teamStyle(team)}>
-                <span>{String(team.powerRank).padStart(2, "0")}</span>
-                <div><strong>{team.name}</strong><small>{team.editorialTag}</small></div>
-                <TeamBadge team={team} compact />
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div><strong>{team.name}</strong><small>{formatMoney(totalCents)} · {entries} {entries === 1 ? "BACKER" : "BACKERS"}</small></div>
+                <b className="power-share">{Math.round(percent)}%</b>
               </li>
             ))}
           </ol>
@@ -235,24 +240,24 @@ function BeybladeVisual({ team, className = "" }: { team: Team; className?: stri
 }
 
 interface TeamPanelProps {
-  team: Team;
+  side: Team;
+  identity: TournamentTeam;
   totalCents: number;
   entries: number;
   percent: number;
   opposingCents: number;
-  winner: Team | null;
+  winnerTeamId: string | null;
   pulse: boolean;
 }
 
-function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, pulse }: TeamPanelProps) {
-  const identity = teamForMarketSide(team);
+function TeamPanel({ side, identity, totalCents, entries, percent, opposingCents, winnerTeamId, pulse }: TeamPanelProps) {
   const projection = projectReturn(totalCents, opposingCents);
-  const won = winner === team;
-  const lost = Boolean(winner && !won);
+  const won = winnerTeamId === identity.id;
+  const lost = Boolean(winnerTeamId && !won);
 
   return (
     <article
-      className={`team-panel ${team} ${pulse ? "team-pulse" : ""} ${won ? "team-winner" : ""} ${lost ? "team-loser" : ""}`}
+      className={`team-panel ${side} ${pulse ? "team-pulse" : ""} ${won ? "team-winner" : ""} ${lost ? "team-loser" : ""}`}
       style={{ ...teamStyle(identity), "--panel-accent": identity.accent } as React.CSSProperties}
       onPointerMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -272,12 +277,12 @@ function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, 
       <span className="panel-scan" aria-hidden="true" />
       <span className="panel-corner corner-top" aria-hidden="true" />
       <span className="panel-corner corner-bottom" aria-hidden="true" />
-      <BeybladeVisual team={team} />
+      <BeybladeVisual team={side} />
       <div className="team-heading">
         <TeamBadge team={identity} compact />
         <div>
           <p className="eyebrow">{identity.marketLabel}</p>
-          <h2>{teamName(team)}</h2>
+          <h2>{identity.name}</h2>
         </div>
       </div>
       {won && <div className="winner-stamp">WINNER</div>}
@@ -292,7 +297,7 @@ function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, 
           <strong><AnimatedNumber value={percent} format={(share) => `${Math.round(share)}%`} showGain /></strong>
         </div>
         <div className="return-stat">
-          <span className="metric-label">{winner ? "FINAL $5 RETURN" : "CURRENT $5 RETURN"}</span>
+          <span className="metric-label">{winnerTeamId ? "FINAL $5 RETURN" : "CURRENT $5 RETURN"}</span>
           <strong>{projection ? <AnimatedNumber value={projection.payoutCents} format={(amount) => formatMoney(Math.round(amount))} /> : "—"}</strong>
           <small>{projection ? <><AnimatedNumber value={projection.profitCents} format={(amount) => formatMoney(Math.round(amount), true)} /> PROFIT</> : "AWAITING BACKING"}</small>
         </div>
@@ -302,13 +307,13 @@ function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, 
 }
 
 function ActivityItem({ item, showRelativeTime }: { item: PublicActivity; showRelativeTime: boolean }) {
-  const officialTeam = item.team_id ? TEAM_BY_ID[item.team_id] : undefined;
+  const officialTeam = TEAM_BY_ID[item.team_id];
   return (
-    <li className={`activity-item ${item.team} ${officialTeam ? "official-activity" : ""}`} style={officialTeam ? teamStyle(officialTeam) : undefined}>
+    <li className="activity-item official-activity" style={officialTeam ? teamStyle(officialTeam) : undefined}>
       <span className="activity-pulse" aria-hidden="true" />
       <span className="activity-amount">+{formatMoney(Math.round(Number(item.amount) * 100))}</span>
       <span className="activity-team">
-        {officialTeam ? `${officialTeam.name} · ${officialTeam.members.join(" + ")}` : teamName(item.team)}
+        {officialTeam ? `${officialTeam.name} · ${officialTeam.members.join(" + ")}` : teamName(item.team_id)}
       </span>
       <time dateTime={item.created_at}>{showRelativeTime ? relativeTime(item.created_at) : "—"}</time>
     </li>
@@ -329,6 +334,38 @@ export function PublicDashboard() {
     isSupabaseConfigured() ? "syncing" : "preview",
   );
   const [, refreshClock] = useState(0);
+  const teamTotalsMap = useMemo(() => new Map<string, TeamMarketTotal>(
+    (Array.isArray(snapshot.team_totals) ? snapshot.team_totals : []).map((total) => [total.team_id, total]),
+  ), [snapshot.team_totals]);
+  const totalCents = useMemo(() => TOURNAMENT_TEAMS.reduce(
+    (sum, team) => sum + toCents(teamTotalsMap.get(team.id)?.total ?? 0),
+    0,
+  ), [teamTotalsMap]);
+  const rankings = useMemo<RankedTeam[]>(() => TOURNAMENT_TEAMS.map((team) => {
+    const market = teamTotalsMap.get(team.id);
+    const teamCents = toCents(market?.total ?? 0);
+    return {
+      team,
+      totalCents: teamCents,
+      entries: market?.entries ?? 0,
+      percent: marketPercent(teamCents, totalCents),
+      newFiveDollarReturn: projectReturn(teamCents + FIVE_DOLLARS_CENTS, totalCents - teamCents),
+    };
+  }).sort((a, b) => b.totalCents - a.totalCents || b.entries - a.entries || a.team.displayOrder - b.team.displayOrder), [teamTotalsMap, totalCents]);
+  const featuredA = rankings[0];
+  const featuredB = rankings[1];
+  const featuredIds = useMemo(() => new Set([featuredA.team.id, featuredB.team.id]), [featuredA.team.id, featuredB.team.id]);
+  const totalEntries = rankings.reduce((sum, item) => sum + item.entries, 0);
+  const featuredPoolCents = featuredA.totalCents + featuredB.totalCents;
+  const stormPercent = marketPercent(featuredA.totalCents, featuredPoolCents);
+  const blazePercent = marketPercent(featuredB.totalCents, featuredPoolCents);
+  const barStormPercent = featuredPoolCents > 0 ? stormPercent : 50;
+  const dominantTeam = stormPercent === blazePercent ? "even" : stormPercent > blazePercent ? "storm" : "blaze";
+  const isContested = Math.abs(stormPercent - blazePercent) <= 10;
+  const valuePick = useMemo(() => [...rankings].sort((a, b) =>
+    (b.newFiveDollarReturn?.payoutCents ?? 0) - (a.newFiveDollarReturn?.payoutCents ?? 0)
+      || a.team.displayOrder - b.team.displayOrder,
+  )[0], [rankings]);
 
   const loadSnapshot = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -418,11 +455,11 @@ export function PublicDashboard() {
     if (!latestActivity || latestActivity.id === latestActivityId.current) return;
 
     latestActivityId.current = latestActivity.id;
-    setArenaSurge(latestActivity.team);
+    setArenaSurge(latestActivity.team_id === featuredA.team.id ? "storm" : latestActivity.team_id === featuredB.team.id ? "blaze" : null);
     if (soundEnabled) playMetallicSlash();
     const timer = window.setTimeout(() => setArenaSurge(null), 900);
     return () => window.clearTimeout(timer);
-  }, [connection, snapshot, soundEnabled]);
+  }, [connection, featuredA.team.id, featuredB.team.id, snapshot, soundEnabled]);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -459,17 +496,11 @@ export function PublicDashboard() {
     }
   }
 
-  const totals = useMemo(() => teamTotals(snapshot), [snapshot]);
-  const stormPercent = marketPercent(totals.stormCents, totals.totalCents);
-  const blazePercent = marketPercent(totals.blazeCents, totals.totalCents);
-  const barStormPercent = totals.totalCents > 0 ? stormPercent : 50;
-  const dominantTeam = stormPercent === blazePercent ? "even" : stormPercent > blazePercent ? "storm" : "blaze";
-  const isContested = Math.abs(stormPercent - blazePercent) <= 10;
-  const winner = snapshot.winning_team;
-  const statusLabel = winner ? "FINAL RESULT" : snapshot.market_open ? "MARKET OPEN" : "MARKET CLOSED";
+  const winnerTeamId = snapshot.winning_team_id;
+  const statusLabel = winnerTeamId ? "FINAL RESULT" : snapshot.market_open ? "MARKET OPEN" : "MARKET CLOSED";
 
   return (
-    <main className={`market-shell ${introActive ? "intro-running" : ""} ${winner ? `has-winner ${winner}-wins` : ""}`}>
+    <main className={`market-shell ${introActive ? "intro-running" : ""} ${winnerTeamId ? "has-winner" : ""}`}>
       <div className="background-grid" aria-hidden="true" />
       <div className="storm-glow" aria-hidden="true" />
       <div className="blaze-glow" aria-hidden="true" />
@@ -497,11 +528,11 @@ export function PublicDashboard() {
       <section className="hero-copy">
         <div>
           <p className="kicker"><span /> LIVE BEYBLADE MARKET <span /></p>
-          <h1>{winner ? `${teamName(winner)} take the arena.` : "Back your blade."}<br />
-            <em>{winner ? "The market has settled." : "Watch the market move."}</em>
+          <h1>{winnerTeamId ? `${teamName(winnerTeamId)} take the arena.` : "Back the champion."}<br />
+            <em>{winnerTeamId ? "The tournament market has settled." : "Watch the field move."}</em>
           </h1>
           <div className="hero-actions">
-            {!winner && (
+            {!winnerTeamId && (
               <button
                 className="bet-cta"
                 type="button"
@@ -531,29 +562,29 @@ export function PublicDashboard() {
           </div>
         </div>
         <div className="pool-lockup">
-          <span>{winner ? "FINAL POOL" : "TOTAL POOL"}</span>
-          <strong><AnimatedNumber value={totals.totalCents} format={(amount) => formatMoney(Math.round(amount))} showGain /></strong>
-          <small><AnimatedNumber value={snapshot.storm_entries + snapshot.blaze_entries} format={(count) => Math.round(count).toString()} showGain /> ENTRIES</small>
+          <span>{winnerTeamId ? "FINAL POOL" : "TOURNAMENT POOL"}</span>
+          <strong><AnimatedNumber value={totalCents} format={(amount) => formatMoney(Math.round(amount))} showGain /></strong>
+          <small><AnimatedNumber value={totalEntries} format={(count) => Math.round(count).toString()} showGain /> ENTRIES</small>
           <i className="pool-scan" aria-hidden="true" />
         </div>
       </section>
       {connection === "preview" && <div className="preview-note">Preview data is showing. Connect Supabase to switch this board live.</div>}
-      <EditorialPick stormCents={totals.stormCents} blazeCents={totals.blazeCents} />
-      {winner && (
-        <section className={`result-banner ${winner}`} aria-live="polite">
+      <EditorialPick pick={valuePick} />
+      {winnerTeamId && (
+        <section className="result-banner storm" style={teamStyle(TEAM_BY_ID[winnerTeamId])} aria-live="polite">
           <span className="result-burst" aria-hidden="true" />
-          <p>ARENA RESULT · MARKET SETTLED</p>
-          <h2>{teamName(winner)} win <span>{winner === "storm" ? "ϟ" : "✦"}</span></h2>
+          <p>TOURNAMENT RESULT · MARKET SETTLED</p>
+          <h2>{teamName(winnerTeamId)} win <span>ϟ</span></h2>
         </section>
       )}
-      <section className="arena" aria-label={`${teamName("storm")} versus ${teamName("blaze")}`}>
+      <section className="arena" aria-label={`${featuredA.team.name} and ${featuredB.team.name}, the two most-backed teams`}>
         <div className="arena-match-label">
-          <strong>{ACTIVE_MATCHUP.label}</strong>
-          <span>{teamForMarketSide("storm").name} <i>VS</i> {teamForMarketSide("blaze").name}</span>
-          <small>FEATURED MARKET // LIVE POOL</small>
+          <strong>MOST BACKED</strong>
+          <span>{featuredA.team.name} <i>VS</i> {featuredB.team.name}</span>
+          <small>TOP TWO // LIVE TOURNAMENT POOL</small>
         </div>
         <span className="arena-telemetry telemetry-bottom" aria-hidden="true">POOL PRESSURE // LIVE</span>
-        <TeamPanel team="storm" totalCents={totals.stormCents} opposingCents={totals.blazeCents} entries={snapshot.storm_entries} percent={stormPercent} winner={winner} pulse={arenaSurge === "storm"} />
+        <TeamPanel side="storm" identity={featuredA.team} totalCents={featuredA.totalCents} opposingCents={totalCents - featuredA.totalCents} entries={featuredA.entries} percent={featuredA.percent} winnerTeamId={winnerTeamId} pulse={arenaSurge === "storm"} />
         <div
           className={`arena-core dominant-${dominantTeam} ${isContested ? "contested" : ""} ${arenaSurge ? `surge-${arenaSurge}` : ""}`}
           style={{ "--storm-share": `${barStormPercent}%` } as React.CSSProperties}
@@ -577,7 +608,7 @@ export function PublicDashboard() {
           <b className="impact-spark impact-four" />
         </div>
         <div className="versus" aria-hidden="true"><span>V</span><span>S</span></div>
-        <TeamPanel team="blaze" totalCents={totals.blazeCents} opposingCents={totals.stormCents} entries={snapshot.blaze_entries} percent={blazePercent} winner={winner} pulse={arenaSurge === "blaze"} />
+        <TeamPanel side="blaze" identity={featuredB.team} totalCents={featuredB.totalCents} opposingCents={totalCents - featuredB.totalCents} entries={featuredB.entries} percent={featuredB.percent} winnerTeamId={winnerTeamId} pulse={arenaSurge === "blaze"} />
         {introActive && (
           <div className="intro-clash" aria-hidden="true">
             <BeybladeVisual team="storm" className="intro-blade intro-storm" />
@@ -593,18 +624,18 @@ export function PublicDashboard() {
       </section>
       <section className={`market-share ${arenaSurge ? `gaining-${arenaSurge}` : ""}`} aria-label="Market share" data-reveal>
         <div className="share-labels">
-          <span className="storm"><b>{teamForMarketSide("storm").shortName}</b> <AnimatedNumber value={stormPercent} format={(share) => `${Math.round(share)}%`} showGain /></span>
+          <span className="storm"><b>{featuredA.team.shortName}</b> <AnimatedNumber value={featuredA.percent} format={(share) => `${Math.round(share)}%`} showGain /></span>
           <span className="center-label">MARKET PRESSURE</span>
-          <span className="blaze"><AnimatedNumber value={blazePercent} format={(share) => `${Math.round(share)}%`} showGain /> <b>{teamForMarketSide("blaze").shortName}</b></span>
+          <span className="blaze"><AnimatedNumber value={featuredB.percent} format={(share) => `${Math.round(share)}%`} showGain /> <b>{featuredB.team.shortName}</b></span>
         </div>
         <div className="share-track">
           <div className="storm-fill" style={{ width: `${barStormPercent}%` }}><span /></div>
           <div className="blaze-fill" style={{ width: `${100 - barStormPercent}%` }}><span /></div>
           <i className="share-clash" style={{ left: `${barStormPercent}%` }} />
         </div>
-        <p>{winner ? "Final market split at settlement." : "Returns move whenever the market changes."}</p>
+        <p>{winnerTeamId ? "Final market split at settlement." : "Top two teams update automatically as backing changes."}</p>
       </section>
-      <TournamentField />
+      <TournamentField rankings={rankings} featuredIds={featuredIds} />
       <section className="lower-grid" data-reveal>
         <div className="activity-panel">
           <div className="section-heading">
@@ -633,7 +664,7 @@ export function PublicDashboard() {
             <button className="bet-modal-close" type="button" aria-label="Close betting instructions" onClick={() => setBetInstructionsOpen(false)}>×</button>
             <p className="bet-modal-kicker">PLACE YOUR BACKING // MARKET OPEN</p>
             <h2 id="bet-modal-title">Make your bet.</h2>
-            <p className="bet-modal-intro">Choose {teamName("storm")} or {teamName("blaze")}, then use one of the payment options below. Isaac will add your bet to the live market.</p>
+            <p className="bet-modal-intro">Choose any team to win the tournament, then use one of the payment options below. Isaac will add your bet to the live market.</p>
             <div className="bet-methods">
               <article>
                 <span>01 / PAYID</span>

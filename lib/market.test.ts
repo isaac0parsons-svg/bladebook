@@ -3,9 +3,9 @@ import test from "node:test";
 import { calculatePayouts, projectReturn, toCents } from "./market.ts";
 import type { Bet } from "./types";
 
-const bet = (id: string, team: "storm" | "blaze", amount: number): Bet => ({
+const bet = (id: string, team_id: string, amount: number): Bet => ({
   id,
-  team,
+  team_id,
   amount,
   name: `Bettor ${id}`,
   created_at: "2026-09-02T00:00:00.000Z",
@@ -25,8 +25,8 @@ test("returns stake only when the losing pool is empty", () => {
 
 test("allocates every cent deterministically across winners", () => {
   const rows = calculatePayouts(
-    [bet("a", "storm", 5), bet("b", "storm", 10), bet("c", "blaze", 10)],
-    "storm",
+    [bet("a", "team-charise", 5), bet("b", "team-charise", 10), bet("c", "nate-ethan", 6), bet("d", "bursters", 4)],
+    "team-charise",
   );
   const winners = rows.filter((row) => row.result === "winner");
   assert.deepEqual(winners.map((row) => row.profitCents), [333, 667]);

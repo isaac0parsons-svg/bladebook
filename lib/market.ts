@@ -1,4 +1,4 @@
-import type { Bet, MarketSnapshot, PayoutRow, Team } from "./types";
+import type { Bet, PayoutRow } from "./types";
 
 export const FIVE_DOLLARS_CENTS = 500;
 
@@ -18,13 +18,6 @@ export function formatMoney(cents: number, sign = false): string {
   })}`;
 }
 
-export function teamTotals(snapshot: MarketSnapshot) {
-  const stormCents = toCents(snapshot.storm_total);
-  const blazeCents = toCents(snapshot.blaze_total);
-  const totalCents = stormCents + blazeCents;
-  return { stormCents, blazeCents, totalCents };
-}
-
 export function marketPercent(teamCents: number, totalCents: number): number {
   if (totalCents <= 0 || teamCents <= 0) return 0;
   return (teamCents / totalCents) * 100;
@@ -40,10 +33,10 @@ export function projectReturn(
   return { profitCents, payoutCents: stakeCents + profitCents };
 }
 
-export function calculatePayouts(bets: Bet[], winner: Team): PayoutRow[] {
+export function calculatePayouts(bets: Bet[], winnerTeamId: string): PayoutRow[] {
   const normalized = bets.map((bet) => ({ ...bet, stakeCents: toCents(bet.amount) }));
-  const winners = normalized.filter((bet) => bet.team === winner && bet.stakeCents > 0);
-  const losers = normalized.filter((bet) => bet.team !== winner);
+  const winners = normalized.filter((bet) => bet.team_id === winnerTeamId && bet.stakeCents > 0);
+  const losers = normalized.filter((bet) => bet.team_id !== winnerTeamId);
   const winningPool = winners.reduce((sum, bet) => sum + bet.stakeCents, 0);
   const losingPool = losers.reduce((sum, bet) => sum + bet.stakeCents, 0);
 
@@ -62,11 +55,11 @@ export function calculatePayouts(bets: Bet[], winner: Team): PayoutRow[] {
   }
 
   return normalized.map((bet) => {
-    if (bet.team !== winner) {
+    if (bet.team_id !== winnerTeamId) {
       return {
         id: bet.id,
         name: bet.name,
-        team: bet.team,
+        team_id: bet.team_id,
         stakeCents: bet.stakeCents,
         profitCents: -bet.stakeCents,
         payoutCents: 0,
@@ -78,7 +71,7 @@ export function calculatePayouts(bets: Bet[], winner: Team): PayoutRow[] {
     return {
       id: bet.id,
       name: bet.name,
-      team: bet.team,
+      team_id: bet.team_id,
       stakeCents: bet.stakeCents,
       profitCents,
       payoutCents: bet.stakeCents + profitCents,
