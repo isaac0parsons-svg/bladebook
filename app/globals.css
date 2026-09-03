@@ -47,13 +47,37 @@ button { color:inherit; }
 .result-banner p { margin:0 0 7px; font-size:.68rem; letter-spacing:.2em; font-weight:800; color:rgba(255,255,255,.66); }
 .result-banner h2 { position:relative; z-index:2; margin:0; font-family:var(--font-display); text-transform:uppercase; font-size:clamp(2rem,6vw,4rem); letter-spacing:-.055em; }
 .result-burst { position:absolute; width:410px; height:410px; right:2%; top:50%; transform:translateY(-50%); border-radius:50%; opacity:.3; background:repeating-conic-gradient(from 0deg,transparent 0 5deg,white 6deg 7deg,transparent 8deg 15deg); animation:rotate-slow 18s linear infinite; }
-.arena { display:grid; grid-template-columns:1fr 1fr; position:relative; border:1px solid var(--line); min-height:405px; background:rgba(8,10,13,.68); box-shadow:0 25px 80px rgba(0,0,0,.35); }
+.arena { display:grid; grid-template-columns:1fr 1fr; position:relative; border:1px solid var(--line); min-height:405px; background:rgba(8,10,13,.68); box-shadow:0 25px 80px rgba(0,0,0,.35); isolation:isolate; }
+.arena::before { content:""; position:absolute; z-index:1; inset:0; pointer-events:none; background:radial-gradient(circle at 50% 48%,rgba(255,255,255,.12),transparent 5%,rgba(85,191,255,.055) 14%,transparent 29%),linear-gradient(115deg,transparent 46%,rgba(101,229,255,.06) 49%,rgba(255,154,61,.065) 51%,transparent 54%); }
 .team-panel { position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:space-between; padding:clamp(22px,4vw,46px); transition:opacity .4s,filter .4s; }
-.team-panel.storm { border-right:1px solid var(--line); background:linear-gradient(140deg,rgba(12,72,151,.34),transparent 58%); }
-.team-panel.blaze { text-align:right; background:linear-gradient(220deg,rgba(158,34,25,.32),transparent 58%); }
+.team-panel.storm { border-right:1px solid var(--line); background:radial-gradient(circle at 92% 36%,rgba(23,136,255,.14),transparent 38%),linear-gradient(140deg,rgba(12,72,151,.34),transparent 58%); }
+.team-panel.blaze { text-align:right; background:radial-gradient(circle at 8% 36%,rgba(237,45,39,.14),transparent 38%),linear-gradient(220deg,rgba(158,34,25,.32),transparent 58%); }
 .team-energy { position:absolute; inset:auto -10% -55% -10%; height:90%; opacity:.23; filter:blur(30px); border-radius:50%; }
 .storm .team-energy { background:var(--storm); }
 .blaze .team-energy { background:var(--blaze); }
+.beyblade-visual { --blade-main:var(--storm); --blade-light:var(--storm-light); --blade-deep:#053f9b; position:absolute; z-index:0; top:47%; right:-74px; width:330px; aspect-ratio:1; transform:translateY(-50%) rotate(-8deg); opacity:.48; pointer-events:none; filter:drop-shadow(0 0 24px rgba(23,136,255,.24)); animation:blade-float 7s ease-in-out infinite; will-change:translate; }
+.beyblade-visual.blaze { --blade-main:var(--blaze); --blade-light:var(--blaze-light); --blade-deep:#8e0d16; right:auto; left:-74px; transform:translateY(-50%) rotate(8deg); filter:drop-shadow(0 0 24px rgba(237,45,39,.24)); animation-delay:-3.5s; }
+.blade-orbit { position:absolute; border-radius:50%; border:1px solid color-mix(in srgb,var(--blade-light) 58%,transparent); }
+.orbit-outer { inset:0; opacity:.35; box-shadow:0 0 22px color-mix(in srgb,var(--blade-main) 24%,transparent),inset 0 0 20px color-mix(in srgb,var(--blade-main) 14%,transparent); animation:orbit-breathe 4.8s ease-in-out infinite; }
+.orbit-inner { inset:11%; border-style:dashed; border-width:2px; opacity:.25; animation:blade-spin 28s linear infinite reverse; }
+.blade-disc { position:absolute; inset:17%; border-radius:50%; background:repeating-conic-gradient(from 8deg,var(--blade-light) 0 5deg,transparent 6deg 28deg),conic-gradient(from 20deg,var(--blade-deep) 0 12%,var(--blade-main) 13% 23%,#111b27 24% 28%,var(--blade-deep) 29% 42%,var(--blade-light) 43% 48%,var(--blade-deep) 49% 63%,#101a25 64% 70%,var(--blade-main) 71% 86%,var(--blade-deep) 87%); clip-path:polygon(50% 0,61% 10%,76% 4%,82% 19%,97% 25%,90% 41%,100% 53%,88% 63%,91% 80%,73% 82%,62% 97%,48% 89%,32% 100%,24% 84%,7% 78%,12% 61%,0 49%,12% 37%,6% 20%,24% 17%,35% 3%); box-shadow:inset 0 0 0 8px rgba(255,255,255,.08),inset 0 0 26px #02060c,0 0 0 2px color-mix(in srgb,var(--blade-light) 45%,transparent),0 0 32px color-mix(in srgb,var(--blade-main) 42%,transparent); animation:blade-spin 19s linear infinite; }
+.blaze .blade-disc { animation-direction:reverse; clip-path:polygon(50% 0,59% 12%,75% 2%,79% 20%,98% 18%,88% 39%,100% 51%,85% 62%,96% 78%,74% 79%,64% 98%,49% 87%,31% 100%,25% 81%,3% 79%,13% 59%,0 46%,15% 36%,5% 18%,28% 20%,36% 2%); }
+.blade-disc::before,.blade-disc::after { content:""; position:absolute; border-radius:50%; }
+.blade-disc::before { inset:20%; border:5px solid color-mix(in srgb,var(--blade-light) 66%,transparent); background:radial-gradient(circle,rgba(255,255,255,.34) 0 7%,var(--blade-deep) 8% 31%,transparent 32%),repeating-conic-gradient(transparent 0 17deg,rgba(255,255,255,.22) 18deg 22deg); box-shadow:0 0 0 5px rgba(0,0,0,.42),inset 0 0 19px #000; }
+.blade-disc::after { inset:38%; background:radial-gradient(circle at 38% 32%,#fff,var(--blade-light) 9%,var(--blade-main) 28%,var(--blade-deep) 62%,#020409 67%); box-shadow:0 0 0 4px rgba(255,255,255,.2),0 0 18px var(--blade-main); }
+.blade-cut { position:absolute; z-index:2; top:5%; left:47%; width:7%; height:35%; transform-origin:50% 129%; background:linear-gradient(var(--blade-light),transparent 78%); clip-path:polygon(50% 0,100% 28%,63% 100%,35% 100%,0 28%); opacity:.7; }
+.blade-cut.cut-two { transform:rotate(90deg); }
+.blade-cut.cut-three { transform:rotate(180deg); }
+.blade-cut.cut-four { transform:rotate(270deg); }
+.blade-hub { position:absolute; z-index:4; inset:42%; display:grid; place-items:center; border-radius:50%; background:#070b11; box-shadow:0 0 0 3px var(--blade-light),0 0 15px var(--blade-main); }
+.blade-hub i { width:45%; height:45%; border:2px solid #fff; transform:rotate(45deg); }
+.blade-trail { position:absolute; z-index:-1; width:38%; height:10%; border-top:2px solid var(--blade-light); border-radius:50%; opacity:.38; filter:drop-shadow(0 0 5px var(--blade-main)); }
+.trail-one { left:-6%; top:27%; transform:rotate(-24deg); }
+.trail-two { right:-5%; bottom:24%; transform:rotate(-28deg); }
+.blade-spark { position:absolute; width:24px; height:2px; background:linear-gradient(90deg,transparent,var(--blade-light)); box-shadow:0 0 6px var(--blade-main); transform-origin:right; opacity:.65; }
+.spark-one { top:15%; left:9%; transform:rotate(-36deg); }
+.spark-two { right:4%; top:30%; transform:rotate(24deg); }
+.spark-three { left:11%; bottom:18%; transform:rotate(33deg); }
 .team-heading { position:relative; z-index:2; display:flex; align-items:center; gap:14px; }
 .blaze .team-heading { flex-direction:row-reverse; }
 .eyebrow { margin:0 0 5px; color:rgba(255,255,255,.48); font-size:.61rem; font-weight:800; letter-spacing:.2em; }
@@ -75,7 +99,23 @@ button { color:inherit; }
 .return-stat small { display:block; margin-top:2px; font-size:.64rem; font-weight:800; letter-spacing:.12em; }
 .storm .return-stat small { color:var(--storm-light); }
 .blaze .return-stat small { color:var(--blaze-light); }
-.versus { position:absolute; z-index:5; left:50%; top:48%; transform:translate(-50%,-50%) rotate(-8deg); display:flex; align-items:center; justify-content:center; width:74px; height:74px; background:#f4f6f8; color:#060708; border:7px solid #090b0e; font-family:var(--font-display); font-size:1.55rem; letter-spacing:-.16em; clip-path:polygon(50% 0,92% 18%,100% 62%,68% 100%,22% 92%,0 50%,14% 12%); box-shadow:0 0 0 1px rgba(255,255,255,.25),0 0 35px rgba(255,255,255,.12); }
+.clash-field { position:absolute; z-index:4; left:50%; top:48%; width:180px; height:180px; transform:translate(-50%,-50%); pointer-events:none; filter:drop-shadow(0 0 10px rgba(255,255,255,.15)); }
+.clash-ring { position:absolute; border-radius:50%; border:1px solid rgba(255,255,255,.22); }
+.clash-ring.ring-one { inset:19px; border-color:rgba(175,225,255,.34) rgba(255,143,89,.34); animation:clash-pulse 3.6s ease-in-out infinite; }
+.clash-ring.ring-two { inset:0; border-style:dashed; opacity:.22; animation:blade-spin 38s linear infinite; }
+.clash-field::before,.clash-field::after { content:""; position:absolute; inset:35%; border-radius:50%; filter:blur(10px); }
+.clash-field::before { background:#8cdfff; transform:translateX(-16px); box-shadow:-25px 0 42px #1788ff; }
+.clash-field::after { background:#ffb05d; transform:translateX(16px); box-shadow:25px 0 42px #ed2d27; }
+.clash-bolt { position:absolute; z-index:2; left:50%; top:50%; width:10px; height:76px; background:#f7fbff; clip-path:polygon(35% 0,100% 0,60% 40%,100% 40%,18% 100%,38% 54%,0 54%); transform-origin:50% 0; filter:drop-shadow(0 0 4px #fff); opacity:.78; }
+.bolt-one { transform:translate(-50%,-50%) rotate(28deg) scale(.55); }
+.bolt-two { transform:translate(-50%,-50%) rotate(148deg) scale(.42); opacity:.48; }
+.bolt-three { transform:translate(-50%,-50%) rotate(267deg) scale(.34); opacity:.38; }
+.impact-spark { position:absolute; z-index:3; left:50%; top:50%; width:42px; height:2px; background:linear-gradient(90deg,#fff,transparent); transform-origin:0 50%; box-shadow:0 0 6px #fff; }
+.impact-one { transform:rotate(-18deg) translateX(34px); }
+.impact-two { transform:rotate(73deg) translateX(34px) scaleX(.65); }
+.impact-three { transform:rotate(164deg) translateX(34px) scaleX(.85); }
+.impact-four { transform:rotate(238deg) translateX(34px) scaleX(.5); }
+.versus { position:absolute; z-index:5; left:50%; top:48%; transform:translate(-50%,-50%) rotate(-8deg); display:flex; align-items:center; justify-content:center; width:74px; height:74px; background:#f4f6f8; color:#060708; border:7px solid #090b0e; font-family:var(--font-display); font-size:1.55rem; letter-spacing:-.16em; clip-path:polygon(50% 0,92% 18%,100% 62%,68% 100%,22% 92%,0 50%,14% 12%); box-shadow:0 0 0 1px rgba(255,255,255,.25),0 0 35px rgba(255,255,255,.38); animation:vs-impact 3.6s ease-in-out infinite; }
 .versus span:last-child { color:var(--blaze); }
 .versus span:first-child { color:var(--storm); }
 .team-winner { filter:saturate(1.25); }
@@ -146,6 +186,11 @@ button { color:inherit; }
 .bet-confirmation i { flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:#39e977; box-shadow:0 0 10px #39e977; }
 .number-pop { display:inline-block; animation:number-pop .45s cubic-bezier(.2,.9,.3,1); }
 @keyframes bet-modal-in { from { opacity:0; transform:translateY(14px) scale(.985); } }
+@keyframes blade-spin { to { rotate:360deg; } }
+@keyframes blade-float { 0%,100% { translate:0 -5px; } 50% { translate:0 7px; } }
+@keyframes orbit-breathe { 50% { scale:1.04; opacity:.55; } }
+@keyframes clash-pulse { 0%,72%,100% { scale:.82; opacity:.18; } 78% { scale:1.08; opacity:.7; } 86% { scale:.96; opacity:.38; } }
+@keyframes vs-impact { 0%,72%,100% { box-shadow:0 0 0 1px rgba(255,255,255,.25),0 0 26px rgba(255,255,255,.25); } 78% { box-shadow:0 0 0 1px rgba(255,255,255,.65),0 0 48px rgba(255,255,255,.75); } }
 @keyframes number-pop { 0% { transform:translateY(8px); opacity:.2; filter:blur(3px); } 100% { transform:none; opacity:1; filter:none; } }
 @keyframes pulse { 50% { opacity:.35; transform:scale(.72); } }
 @keyframes sweep { from { transform:translateX(-120%); } to { transform:translateX(120%); } }
@@ -167,6 +212,9 @@ button { color:inherit; }
   .result-banner { min-height:112px; }
   .arena { min-height:330px; }
   .team-panel { padding:17px 12px; }
+  .beyblade-visual { width:210px; right:-75px; opacity:.34; }
+  .beyblade-visual.blaze { right:auto; left:-75px; }
+  .blade-spark,.trail-two { display:none; }
   .team-heading { display:block; }
   .team-mark { width:36px; height:36px; margin-bottom:10px; font-size:1.45rem; }
   .blaze .team-mark { margin-left:auto; }
@@ -183,6 +231,13 @@ button { color:inherit; }
   .team-stat-row strong { font-size:clamp(1.3rem,6vw,1.8rem); }
   .return-stat small { font-size:.47rem; letter-spacing:.06em; }
   .versus { width:51px; height:51px; border-width:5px; font-size:1.05rem; top:46%; }
+  .clash-field { width:112px; height:112px; top:46%; }
+  .clash-bolt { height:48px; width:7px; }
+  .impact-spark { width:25px; }
+  .impact-one { transform:rotate(-18deg) translateX(22px); }
+  .impact-two { transform:rotate(73deg) translateX(22px) scaleX(.65); }
+  .impact-three { transform:rotate(164deg) translateX(22px) scaleX(.85); }
+  .impact-four { transform:rotate(238deg) translateX(22px) scaleX(.5); }
   .winner-stamp { top:12px; right:9px; font-size:.48rem; }
   .blaze .winner-stamp { left:9px; }
   .share-labels { grid-template-columns:1fr 1fr; font-size:.68rem; }

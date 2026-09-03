@@ -47,6 +47,27 @@ function AnimatedValue({ children }: { children: React.ReactNode }) {
   return <span className="number-pop" key={String(children)}>{children}</span>;
 }
 
+function BeybladeVisual({ team }: { team: Team }) {
+  return (
+    <div className={`beyblade-visual ${team}`} aria-hidden="true">
+      <span className="blade-orbit orbit-outer" />
+      <span className="blade-orbit orbit-inner" />
+      <span className="blade-disc">
+        <i className="blade-cut cut-one" />
+        <i className="blade-cut cut-two" />
+        <i className="blade-cut cut-three" />
+        <i className="blade-cut cut-four" />
+        <b className="blade-hub"><i /></b>
+      </span>
+      <span className="blade-trail trail-one" />
+      <span className="blade-trail trail-two" />
+      <span className="blade-spark spark-one" />
+      <span className="blade-spark spark-two" />
+      <span className="blade-spark spark-three" />
+    </div>
+  );
+}
+
 interface TeamPanelProps {
   team: Team;
   totalCents: number;
@@ -65,6 +86,7 @@ function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner }
   return (
     <article className={`team-panel ${team} ${won ? "team-winner" : ""} ${lost ? "team-loser" : ""}`}>
       <div className="team-energy" aria-hidden="true" />
+      <BeybladeVisual team={team} />
       <div className="team-heading">
         <span className="team-mark" aria-hidden="true">{isStorm ? "ϟ" : "✦"}</span>
         <div>
@@ -229,6 +251,17 @@ export function PublicDashboard() {
       )}
       <section className="arena" aria-label="Storm Strikers versus Blaze Brothers">
         <TeamPanel team="storm" totalCents={totals.stormCents} opposingCents={totals.blazeCents} entries={snapshot.storm_entries} percent={stormPercent} winner={winner} />
+        <div className="clash-field" aria-hidden="true">
+          <span className="clash-ring ring-one" />
+          <span className="clash-ring ring-two" />
+          <i className="clash-bolt bolt-one" />
+          <i className="clash-bolt bolt-two" />
+          <i className="clash-bolt bolt-three" />
+          <b className="impact-spark impact-one" />
+          <b className="impact-spark impact-two" />
+          <b className="impact-spark impact-three" />
+          <b className="impact-spark impact-four" />
+        </div>
         <div className="versus" aria-hidden="true"><span>V</span><span>S</span></div>
         <TeamPanel team="blaze" totalCents={totals.blazeCents} opposingCents={totals.stormCents} entries={snapshot.blaze_entries} percent={blazePercent} winner={winner} />
       </section>
