@@ -60,32 +60,29 @@ function TeamBadge({ team, compact = false }: { team: TournamentTeam; compact?: 
   );
 }
 
-function NextMatchup() {
-  const teamA = TEAM_BY_ID[ACTIVE_MATCHUP.teamAId];
-  const teamB = TEAM_BY_ID[ACTIVE_MATCHUP.teamBId];
+function EditorialPick({ stormCents, blazeCents }: { stormCents: number; blazeCents: number }) {
+  const stormProjection = projectReturn(stormCents, blazeCents);
+  const blazeProjection = projectReturn(blazeCents, stormCents);
+  const pickSide: Team = (blazeProjection?.payoutCents ?? 0) > (stormProjection?.payoutCents ?? 0) ? "blaze" : "storm";
+  const pick = teamForMarketSide(pickSide);
+  const projection = pickSide === "storm" ? stormProjection : blazeProjection;
+
   return (
-    <section className="next-matchup" aria-labelledby="next-matchup-title" data-reveal>
-      <div className="next-matchup-label">
-        <span>{ACTIVE_MATCHUP.label}</span>
-        <small>FEATURED MARKET // EDITORIAL PREVIEW</small>
+    <section className="editorial-pick" style={teamStyle(pick)} aria-labelledby="editorial-pick-title" data-reveal>
+      <div className="editorial-pick-copy">
+        <p>OUR PICK <span>{"// VALUE WATCH"}</span></p>
+        <h2 id="editorial-pick-title">{pick.name}</h2>
+        <small>{pick.members.join(" + ")} · Based on the current pool split</small>
       </div>
-      <article className="matchup-team team-a" style={teamStyle(teamA)}>
-        <TeamBadge team={teamA} compact />
+      <div className="editorial-pick-return">
         <div>
-          <p>{teamA.editorialTag}</p>
-          <h2 id="next-matchup-title">{teamA.name}</h2>
-          <span>{teamA.members.join(" + ")} · GAME {teamA.openingGame}</span>
+          <span>CURRENT $5 RETURN</span>
+          <strong>{projection ? formatMoney(projection.payoutCents) : "—"}</strong>
+          <small>{projection ? `${formatMoney(projection.profitCents, true)} potential profit` : "Awaiting backing"}</small>
         </div>
-      </article>
-      <div className="matchup-core" aria-hidden="true"><i /><b>VS</b><i /></div>
-      <article className="matchup-team team-b" style={teamStyle(teamB)}>
-        <div>
-          <p>{teamB.editorialTag}</p>
-          <h2>{teamB.name}</h2>
-          <span>{teamB.members.join(" + ")} · GAME {teamB.openingGame}</span>
-        </div>
-        <TeamBadge team={teamB} compact />
-      </article>
+        <TeamBadge team={pick} compact />
+      </div>
+      <p className="editorial-pick-note">Editorial lean only · returns move with every bet</p>
     </section>
   );
 }
@@ -310,7 +307,9 @@ function ActivityItem({ item, showRelativeTime }: { item: PublicActivity; showRe
     <li className={`activity-item ${item.team} ${officialTeam ? "official-activity" : ""}`} style={officialTeam ? teamStyle(officialTeam) : undefined}>
       <span className="activity-pulse" aria-hidden="true" />
       <span className="activity-amount">+{formatMoney(Math.round(Number(item.amount) * 100))}</span>
-      <span className="activity-team">{officialTeam?.name ?? teamName(item.team)}</span>
+      <span className="activity-team">
+        {officialTeam ? `${officialTeam.name} · ${officialTeam.members.join(" + ")}` : teamName(item.team)}
+      </span>
       <time dateTime={item.created_at}>{showRelativeTime ? relativeTime(item.created_at) : "—"}</time>
     </li>
   );
@@ -539,7 +538,7 @@ export function PublicDashboard() {
         </div>
       </section>
       {connection === "preview" && <div className="preview-note">Preview data is showing. Connect Supabase to switch this board live.</div>}
-      <NextMatchup />
+      <EditorialPick stormCents={totals.stormCents} blazeCents={totals.blazeCents} />
       {winner && (
         <section className={`result-banner ${winner}`} aria-live="polite">
           <span className="result-burst" aria-hidden="true" />
@@ -548,7 +547,11 @@ export function PublicDashboard() {
         </section>
       )}
       <section className="arena" aria-label={`${teamName("storm")} versus ${teamName("blaze")}`}>
-        <span className="arena-telemetry telemetry-top" aria-hidden="true">ARENA VECTOR // 08.42</span>
+        <div className="arena-match-label">
+          <strong>{ACTIVE_MATCHUP.label}</strong>
+          <span>{teamForMarketSide("storm").name} <i>VS</i> {teamForMarketSide("blaze").name}</span>
+          <small>FEATURED MARKET // LIVE POOL</small>
+        </div>
         <span className="arena-telemetry telemetry-bottom" aria-hidden="true">POOL PRESSURE // LIVE</span>
         <TeamPanel team="storm" totalCents={totals.stormCents} opposingCents={totals.blazeCents} entries={snapshot.storm_entries} percent={stormPercent} winner={winner} pulse={arenaSurge === "storm"} />
         <div
