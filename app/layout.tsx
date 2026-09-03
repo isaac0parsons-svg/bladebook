@@ -1,8 +1,22 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+function getMetadataBase(): URL {
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (configuredSiteUrl) {
+    try {
+      return new URL(configuredSiteUrl);
+    } catch {
+      // Keep metadata generation build-safe when a deployment URL is malformed.
+    }
+  }
+
+  return new URL("http://localhost:3000");
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: getMetadataBase(),
   title: {
     default: "BladeBook — Live Beyblade Market",
     template: "%s | BladeBook",

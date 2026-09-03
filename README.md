@@ -21,7 +21,7 @@ The shared calculation library uses integer cents. Final settlement distributes 
 
 ## Local setup
 
-Requirements: Node.js 22.13 or newer and npm.
+Requirements: Node.js 22 LTS and npm.
 
 1. Install dependencies:
 
