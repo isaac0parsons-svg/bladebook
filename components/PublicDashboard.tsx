@@ -107,6 +107,8 @@ function ActivityItem({ item, showRelativeTime }: { item: PublicActivity; showRe
 export function PublicDashboard() {
   const hasMounted = useHasMounted();
   const [snapshot, setSnapshot] = useState<MarketSnapshot>(demoSnapshot);
+  const [betInstructionsOpen, setBetInstructionsOpen] = useState(false);
+  const [payIdCopied, setPayIdCopied] = useState(false);
   const [connection, setConnection] = useState<"live" | "syncing" | "preview" | "offline">(
     isSupabaseConfigured() ? "syncing" : "preview",
   );
@@ -153,6 +155,25 @@ export function PublicDashboard() {
     };
   }, [loadSnapshot]);
 
+  useEffect(() => {
+    if (!betInstructionsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBetInstructionsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [betInstructionsOpen]);
+
+  async function copyPayId() {
+    try {
+      await navigator.clipboard.writeText("0493 068 792");
+      setPayIdCopied(true);
+      window.setTimeout(() => setPayIdCopied(false), 1800);
+    } catch {
+      setPayIdCopied(false);
+    }
+  }
+
   const totals = useMemo(() => teamTotals(snapshot), [snapshot]);
   const stormPercent = marketPercent(totals.stormCents, totals.totalCents);
   const blazePercent = marketPercent(totals.blazeCents, totals.totalCents);
@@ -181,6 +202,16 @@ export function PublicDashboard() {
           <h1>{winner ? `${teamName(winner)} take the arena.` : "Back your blade."}<br />
             <em>{winner ? "The market has settled." : "Watch the market move."}</em>
           </h1>
+          {!winner && (
+            <button
+              className="bet-cta"
+              type="button"
+              disabled={!snapshot.market_open}
+              onClick={() => setBetInstructionsOpen(true)}
+            >
+              {snapshot.market_open ? "MAKE YOUR BET" : "BETTING CLOSED"}<span aria-hidden="true">→</span>
+            </button>
+          )}
         </div>
         <div className="pool-lockup">
           <span>{winner ? "FINAL POOL" : "TOTAL POOL"}</span>
@@ -236,6 +267,34 @@ export function PublicDashboard() {
         <span>LAST SYNC {hasMounted ? relativeTime(snapshot.updated_at).toUpperCase() : "—"}</span>
         <Link href="/admin">ADMIN ACCESS →</Link>
       </footer>
+      {betInstructionsOpen && (
+        <div className="bet-modal-layer">
+          <section className="bet-modal" role="dialog" aria-modal="true" aria-labelledby="bet-modal-title">
+            <button className="bet-modal-close" type="button" aria-label="Close betting instructions" onClick={() => setBetInstructionsOpen(false)}>×</button>
+            <p className="bet-modal-kicker">PLACE YOUR BACKING // MARKET OPEN</p>
+            <h2 id="bet-modal-title">Make your bet.</h2>
+            <p className="bet-modal-intro">Choose Storm Strikers or Blaze Brothers, then use one of the payment options below. Isaac will add your bet to the live market.</p>
+            <div className="bet-methods">
+              <article>
+                <span>01 / PAYID</span>
+                <h3>Pay by phone</h3>
+                <button className="payid-copy" type="button" onClick={() => void copyPayId()}>
+                  <b>0493 068 792</b>
+                  <small>{payIdCopied ? "COPIED" : "COPY PAYID"}</small>
+                </button>
+                <p>Include your name, team and bet amount with your payment so your backing can be matched.</p>
+              </article>
+              <article>
+                <span>02 / CASH</span>
+                <h3>Bring cash</h3>
+                <strong>SEE ISAAC</strong>
+                <p>Tell Isaac your team and bet amount when you hand over the cash. You will be added to the live pool.</p>
+              </article>
+            </div>
+            <p className="bet-confirmation"><i /> Your bet appears once payment has been received and Isaac has added it.</p>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
