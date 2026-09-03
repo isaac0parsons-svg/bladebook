@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { formatMoney, marketPercent, projectReturn, teamTotals } from "@/lib/market";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { ACTIVE_MATCHUP, POWER_BOARD, TEAM_BY_ID, TOURNAMENT_TEAMS, teamForMarketSide, type TournamentTeam } from "@/lib/teams";
 import type { MarketSnapshot, PublicActivity, Team } from "@/lib/types";
 
 const demoSnapshot: MarketSnapshot = {
@@ -40,7 +41,103 @@ function relativeTime(timestamp: string): string {
 }
 
 function teamName(team: Team): string {
-  return team === "storm" ? "Storm Strikers" : "Blaze Brothers";
+  return teamForMarketSide(team).name;
+}
+
+function teamStyle(team: TournamentTeam): React.CSSProperties {
+  return {
+    "--team-accent": team.accent,
+    "--team-rgb": team.accentRgb,
+  } as React.CSSProperties;
+}
+
+function TeamBadge({ team, compact = false }: { team: TournamentTeam; compact?: boolean }) {
+  return (
+    <span className={`team-badge logo-${team.logoType} ${compact ? "compact" : ""}`} style={teamStyle(team)} aria-hidden="true">
+      <i />
+      <b>{team.monogram}</b>
+    </span>
+  );
+}
+
+function NextMatchup() {
+  const teamA = TEAM_BY_ID[ACTIVE_MATCHUP.teamAId];
+  const teamB = TEAM_BY_ID[ACTIVE_MATCHUP.teamBId];
+  return (
+    <section className="next-matchup" aria-labelledby="next-matchup-title" data-reveal>
+      <div className="next-matchup-label">
+        <span>{ACTIVE_MATCHUP.label}</span>
+        <small>FEATURED MARKET // EDITORIAL PREVIEW</small>
+      </div>
+      <article className="matchup-team team-a" style={teamStyle(teamA)}>
+        <TeamBadge team={teamA} compact />
+        <div>
+          <p>{teamA.editorialTag}</p>
+          <h2 id="next-matchup-title">{teamA.name}</h2>
+          <span>{teamA.members.join(" + ")} · GAME {teamA.openingGame}</span>
+        </div>
+      </article>
+      <div className="matchup-core" aria-hidden="true"><i /><b>VS</b><i /></div>
+      <article className="matchup-team team-b" style={teamStyle(teamB)}>
+        <div>
+          <p>{teamB.editorialTag}</p>
+          <h2>{teamB.name}</h2>
+          <span>{teamB.members.join(" + ")} · GAME {teamB.openingGame}</span>
+        </div>
+        <TeamBadge team={teamB} compact />
+      </article>
+    </section>
+  );
+}
+
+function TournamentField() {
+  return (
+    <section className="tournament-field" aria-labelledby="tournament-field-title" data-reveal>
+      <div className="field-heading">
+        <div>
+          <p>OFFICIAL ROSTER // 07 TEAMS</p>
+          <h2 id="tournament-field-title">Tournament field</h2>
+        </div>
+        <span>EDITORIAL TAGS · NOT CALCULATED ODDS</span>
+      </div>
+      <div className="field-layout">
+        <div className="team-card-grid">
+          {TOURNAMENT_TEAMS.map((team) => (
+            <article className={`roster-card logo-${team.logoType}`} style={teamStyle(team)} data-rank={String(team.powerRank).padStart(2, "0")} key={team.id}>
+              <div className="roster-card-top">
+                <TeamBadge team={team} />
+                <div className="roster-status"><i />{team.status}</div>
+              </div>
+              <p className="roster-label">{team.marketLabel}</p>
+              <h3>{team.name}</h3>
+              <p className="roster-members">{team.members.join(" & ")}</p>
+              <div className="roster-meta">
+                <span>{team.openingGame ? `OPENING · GAME ${team.openingGame}` : "OPENING · —"}</span>
+                <b>{team.editorialTag}</b>
+              </div>
+              <blockquote>“{team.flavourLine}”</blockquote>
+            </article>
+          ))}
+        </div>
+        <aside className="power-board" aria-labelledby="power-board-title">
+          <div className="power-board-head">
+            <span>EDITORIAL RANKING</span>
+            <h3 id="power-board-title">BladeBook<br />Power Board</h3>
+            <p>Pre-tournament desk picks. Pure opinion, maximum debate.</p>
+          </div>
+          <ol>
+            {POWER_BOARD.map((team) => (
+              <li key={team.id} style={teamStyle(team)}>
+                <span>{String(team.powerRank).padStart(2, "0")}</span>
+                <div><strong>{team.name}</strong><small>{team.editorialTag}</small></div>
+                <TeamBadge team={team} compact />
+              </li>
+            ))}
+          </ol>
+        </aside>
+      </div>
+    </section>
+  );
 }
 
 interface AnimatedNumberProps {
@@ -151,14 +248,15 @@ interface TeamPanelProps {
 }
 
 function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, pulse }: TeamPanelProps) {
+  const identity = teamForMarketSide(team);
   const projection = projectReturn(totalCents, opposingCents);
-  const isStorm = team === "storm";
   const won = winner === team;
   const lost = Boolean(winner && !won);
 
   return (
     <article
       className={`team-panel ${team} ${pulse ? "team-pulse" : ""} ${won ? "team-winner" : ""} ${lost ? "team-loser" : ""}`}
+      style={{ ...teamStyle(identity), "--panel-accent": identity.accent } as React.CSSProperties}
       onPointerMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const horizontal = (event.clientX - bounds.left) / bounds.width - 0.5;
@@ -179,9 +277,9 @@ function TeamPanel({ team, totalCents, entries, percent, opposingCents, winner, 
       <span className="panel-corner corner-bottom" aria-hidden="true" />
       <BeybladeVisual team={team} />
       <div className="team-heading">
-        <span className="team-mark" aria-hidden="true">{isStorm ? "ϟ" : "✦"}</span>
+        <TeamBadge team={identity} compact />
         <div>
-          <p className="eyebrow">{isStorm ? "COLD FRONT" : "HEAT WAVE"}</p>
+          <p className="eyebrow">{identity.marketLabel}</p>
           <h2>{teamName(team)}</h2>
         </div>
       </div>
@@ -440,6 +538,7 @@ export function PublicDashboard() {
         </div>
       </section>
       {connection === "preview" && <div className="preview-note">Preview data is showing. Connect Supabase to switch this board live.</div>}
+      <NextMatchup />
       {winner && (
         <section className={`result-banner ${winner}`} aria-live="polite">
           <span className="result-burst" aria-hidden="true" />
@@ -447,7 +546,7 @@ export function PublicDashboard() {
           <h2>{teamName(winner)} win <span>{winner === "storm" ? "ϟ" : "✦"}</span></h2>
         </section>
       )}
-      <section className="arena" aria-label="Storm Strikers versus Blaze Brothers">
+      <section className="arena" aria-label={`${teamName("storm")} versus ${teamName("blaze")}`}>
         <span className="arena-telemetry telemetry-top" aria-hidden="true">ARENA VECTOR // 08.42</span>
         <span className="arena-telemetry telemetry-bottom" aria-hidden="true">POOL PRESSURE // LIVE</span>
         <TeamPanel team="storm" totalCents={totals.stormCents} opposingCents={totals.blazeCents} entries={snapshot.storm_entries} percent={stormPercent} winner={winner} pulse={arenaSurge === "storm"} />
@@ -490,9 +589,9 @@ export function PublicDashboard() {
       </section>
       <section className={`market-share ${arenaSurge ? `gaining-${arenaSurge}` : ""}`} aria-label="Market share" data-reveal>
         <div className="share-labels">
-          <span className="storm"><b>STORM</b> <AnimatedNumber value={stormPercent} format={(share) => `${Math.round(share)}%`} showGain /></span>
+          <span className="storm"><b>{teamForMarketSide("storm").shortName}</b> <AnimatedNumber value={stormPercent} format={(share) => `${Math.round(share)}%`} showGain /></span>
           <span className="center-label">MARKET PRESSURE</span>
-          <span className="blaze"><AnimatedNumber value={blazePercent} format={(share) => `${Math.round(share)}%`} showGain /> <b>BLAZE</b></span>
+          <span className="blaze"><AnimatedNumber value={blazePercent} format={(share) => `${Math.round(share)}%`} showGain /> <b>{teamForMarketSide("blaze").shortName}</b></span>
         </div>
         <div className="share-track">
           <div className="storm-fill" style={{ width: `${barStormPercent}%` }}><span /></div>
@@ -501,6 +600,7 @@ export function PublicDashboard() {
         </div>
         <p>{winner ? "Final market split at settlement." : "Returns move whenever the market changes."}</p>
       </section>
+      <TournamentField />
       <section className="lower-grid" data-reveal>
         <div className="activity-panel">
           <div className="section-heading">
@@ -529,7 +629,7 @@ export function PublicDashboard() {
             <button className="bet-modal-close" type="button" aria-label="Close betting instructions" onClick={() => setBetInstructionsOpen(false)}>×</button>
             <p className="bet-modal-kicker">PLACE YOUR BACKING // MARKET OPEN</p>
             <h2 id="bet-modal-title">Make your bet.</h2>
-            <p className="bet-modal-intro">Choose Storm Strikers or Blaze Brothers, then use one of the payment options below. Isaac will add your bet to the live market.</p>
+            <p className="bet-modal-intro">Choose {teamName("storm")} or {teamName("blaze")}, then use one of the payment options below. Isaac will add your bet to the live market.</p>
             <div className="bet-methods">
               <article>
                 <span>01 / PAYID</span>

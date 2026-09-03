@@ -5,11 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { calculatePayouts, formatMoney, projectReturn, toCents } from "@/lib/market";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import { teamForMarketSide } from "@/lib/teams";
 import type { Bet, MarketState, Team } from "@/lib/types";
 
 function nameFor(team: Team) {
-  return team === "storm" ? "Storm Strikers" : "Blaze Brothers";
+  return teamForMarketSide(team).name;
 }
+
+const marketTeamA = teamForMarketSide("storm");
+const marketTeamB = teamForMarketSide("blaze");
 
 function downloadCsv(rows: ReturnType<typeof calculatePayouts>) {
   const quote = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
@@ -80,7 +84,7 @@ function EditRow({ bet, onSave, onCancel }: EditRowProps) {
   return (
     <tr className="editing-row">
       <td><input aria-label="Edit bettor name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></td>
-      <td><select aria-label="Edit team" value={draft.team} onChange={(event) => setDraft({ ...draft, team: event.target.value as Team })}><option value="storm">Storm</option><option value="blaze">Blaze</option></select></td>
+      <td><select aria-label="Edit team" value={draft.team} onChange={(event) => setDraft({ ...draft, team: event.target.value as Team })}><option value="storm">{marketTeamA.name}</option><option value="blaze">{marketTeamB.name}</option></select></td>
       <td><input aria-label="Edit amount" type="number" min="0.01" step="0.01" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} /></td>
       <td>—</td>
       <td colSpan={2}><div className="row-actions"><button onClick={() => void onSave(draft)}>SAVE</button><button onClick={onCancel}>CANCEL</button></div></td>
@@ -251,8 +255,8 @@ export function AdminDashboard() {
       </section>
 
       <section className="admin-metrics">
-        <article className="metric-tile storm"><span>STORM POOL</span><strong>{formatMoney(metrics.stormCents)}</strong><small>{metrics.stormEntries} ENTRIES · $5 → {stormReturn ? formatMoney(stormReturn.payoutCents) : "—"}</small></article>
-        <article className="metric-tile blaze"><span>BLAZE POOL</span><strong>{formatMoney(metrics.blazeCents)}</strong><small>{metrics.blazeEntries} ENTRIES · $5 → {blazeReturn ? formatMoney(blazeReturn.payoutCents) : "—"}</small></article>
+        <article className="metric-tile storm"><span>{marketTeamA.shortName} POOL</span><strong>{formatMoney(metrics.stormCents)}</strong><small>{metrics.stormEntries} ENTRIES · $5 → {stormReturn ? formatMoney(stormReturn.payoutCents) : "—"}</small></article>
+        <article className="metric-tile blaze"><span>{marketTeamB.shortName} POOL</span><strong>{formatMoney(metrics.blazeCents)}</strong><small>{metrics.blazeEntries} ENTRIES · $5 → {blazeReturn ? formatMoney(blazeReturn.payoutCents) : "—"}</small></article>
         <article className="metric-tile total"><span>TOTAL MARKET</span><strong>{formatMoney(metrics.totalCents)}</strong><small>{bets.length} TOTAL ENTRIES</small></article>
       </section>
 
@@ -261,11 +265,11 @@ export function AdminDashboard() {
           <div className="admin-section-head"><div><span>01 / RAPID ENTRY</span><h2>Log a payment</h2></div><b>{marketOpen ? "READY" : "LOCKED"}</b></div>
           <label className="quick-name">BETTOR NAME<input ref={nameInput} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && name.trim()) { event.preventDefault(); void addEntry(team, Number(amount)); } }} disabled={!marketOpen || loading} placeholder="Type a name…" /></label>
           <div className="quick-buttons">
-            <button className="quick-storm" disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry("storm", 5)}><span>ϟ</span><b>+$5 STORM</b><small>ONE TAP ENTRY</small></button>
-            <button className="quick-blaze" disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry("blaze", 5)}><span>✦</span><b>+$5 BLAZE</b><small>ONE TAP ENTRY</small></button>
+            <button className="quick-storm" disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry("storm", 5)}><span>{marketTeamA.monogram}</span><b>+$5 {marketTeamA.shortName}</b><small>ONE TAP ENTRY</small></button>
+            <button className="quick-blaze" disabled={!marketOpen || !name.trim() || loading} onClick={() => void addEntry("blaze", 5)}><span>{marketTeamB.monogram}</span><b>+$5 {marketTeamB.shortName}</b><small>ONE TAP ENTRY</small></button>
           </div>
           <div className="custom-entry">
-            <label>TEAM<select value={team} onChange={(event) => setTeam(event.target.value as Team)} disabled={!marketOpen}><option value="storm">Storm Strikers</option><option value="blaze">Blaze Brothers</option></select></label>
+            <label>TEAM<select value={team} onChange={(event) => setTeam(event.target.value as Team)} disabled={!marketOpen}><option value="storm">{marketTeamA.name}</option><option value="blaze">{marketTeamB.name}</option></select></label>
             <label>AMOUNT<input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} disabled={!marketOpen} /></label>
             <button disabled={!marketOpen || !name.trim() || Number(amount) <= 0 || loading} onClick={() => void addEntry(team, Number(amount))}>ADD CUSTOM →</button>
           </div>
@@ -281,8 +285,8 @@ export function AdminDashboard() {
           <div className="winner-controls">
             <span>DECLARE WINNER</span>
             <p>Close the market before confirming a result.</p>
-            <button className="storm" disabled={market?.event_status !== "closed" || metrics.stormCents <= 0} onClick={() => void declareWinner("storm")}>ϟ STORM STRIKERS WIN</button>
-            <button className="blaze" disabled={market?.event_status !== "closed" || metrics.blazeCents <= 0} onClick={() => void declareWinner("blaze")}>✦ BLAZE BROTHERS WIN</button>
+            <button className="storm" disabled={market?.event_status !== "closed" || metrics.stormCents <= 0} onClick={() => void declareWinner("storm")}>{marketTeamA.monogram} {marketTeamA.shortName} WIN</button>
+            <button className="blaze" disabled={market?.event_status !== "closed" || metrics.blazeCents <= 0} onClick={() => void declareWinner("blaze")}>{marketTeamB.monogram} {marketTeamB.shortName} WIN</button>
           </div>
         </aside>
       </section>
@@ -291,7 +295,7 @@ export function AdminDashboard() {
         <div className="ledger-toolbar"><div><span>03 / ENTRY LEDGER</span><h2>All backing</h2></div><label>SEARCH<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a bettor…" /></label></div>
         <div className="table-wrap"><table className="ledger-table"><thead><tr><th>NAME</th><th>TEAM</th><th>AMOUNT</th><th>TIME</th><th>EDIT</th><th>DELETE</th></tr></thead><tbody>
           {filteredBets.map((bet) => editingId === bet.id ? <EditRow key={bet.id} bet={bet} onSave={saveBet} onCancel={() => setEditingId(null)} /> : (
-            <tr key={bet.id}><td data-label="Name"><strong>{bet.name}</strong></td><td data-label="Team"><span className={`team-pill ${bet.team}`}>{bet.team === "storm" ? "ϟ STORM" : "✦ BLAZE"}</span></td><td data-label="Amount">{formatMoney(toCents(bet.amount))}</td><td data-label="Time"><time dateTime={bet.created_at}>{new Date(bet.created_at).toLocaleString("en-AU", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" })}</time></td><td><button className="table-action" disabled={!marketOpen} onClick={() => setEditingId(bet.id)}>EDIT</button></td><td><button className="table-action delete" disabled={!marketOpen} onClick={() => void deleteBet(bet)}>DELETE</button></td></tr>
+            <tr key={bet.id}><td data-label="Name"><strong>{bet.name}</strong></td><td data-label="Team"><span className={`team-pill ${bet.team}`}>{teamForMarketSide(bet.team).monogram} {teamForMarketSide(bet.team).shortName}</span></td><td data-label="Amount">{formatMoney(toCents(bet.amount))}</td><td data-label="Time"><time dateTime={bet.created_at}>{new Date(bet.created_at).toLocaleString("en-AU", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" })}</time></td><td><button className="table-action" disabled={!marketOpen} onClick={() => setEditingId(bet.id)}>EDIT</button></td><td><button className="table-action delete" disabled={!marketOpen} onClick={() => void deleteBet(bet)}>DELETE</button></td></tr>
           ))}
           {filteredBets.length === 0 && <tr><td className="empty-ledger" colSpan={6}>{bets.length ? "No names match your search." : "No entries yet. The first payment will appear here."}</td></tr>}
         </tbody></table></div>
