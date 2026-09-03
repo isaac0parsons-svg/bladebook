@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": "22.x"
+  },
+  "allowScripts": {
+    "sharp@0.34.5": true
   },
   "scripts": {
     "dev": "next dev",
@@ -11,7 +14,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test lib/market.test.ts"
+    "test": "node --test --experimental-strip-types lib/market.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -33,7 +36,6 @@
     "globals": "16.4.0",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
-    "tsx": "^4.20.5",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3"
   }

@@ -3,7 +3,7 @@
 
 do $$
 declare
-  target_email constant text := 'you@example.com';
+  target_email constant text := 'isaac0parsons@gmail.com';
   target_user_id uuid;
 begin
   select id into target_user_id

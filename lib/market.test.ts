@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculatePayouts, projectReturn, toCents } from "./market";
+import { calculatePayouts, projectReturn, toCents } from "./market.ts";
 import type { Bet } from "./types";
 
 const bet = (id: string, team: "storm" | "blaze", amount: number): Bet => ({
